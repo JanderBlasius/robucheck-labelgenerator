@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Produktlabel-Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bwip-js/3.4.0/bwip-js-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f0efe9;
+  --surface: #ffffff;
+  --border: #d8d6ce;
+  --text: #1a1a18;
+  --muted: #6b6a66;
+  --accent: #1d3a6b;
+  --accent-light: #e8edf5;
+  --success: #1a5c35;
+  --success-bg: #e6f4ed;
+  --danger: #8b1a1a;
+  --danger-bg: #fceaea;
+  --radius: 10px;
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'DM Sans', system-ui, sans-serif;
+}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; padding: 2rem 1.5rem; }
+
+.app { max-width: 900px; margin: 0 auto; }
+
+/* Header */
+.header { display: flex; align-items: center; gap: 1rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+.header-icon { width: 44px; height: 44px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.header-icon svg { width: 24px; height: 24px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; }
+.header-title { font-size: 1.15rem; font-weight: 700; }
+.header-sub { font-size: 0.75rem; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+.header-badge { margin-left: auto; font-family: var(--mono); font-size: 0.68rem; background: var(--accent-light); color: var(--accent); border: 1px solid #c4d2ea; padding: 4px 10px; border-radius: 100px; }
+
+/* Layout */
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; }
+
+/* Card */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+.card + .card { margin-top: 1.25rem; }
+.card-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; gap: 6px; }
+.card-title svg { width: 13px; height: 13px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+
+/* Fields */
+.field { margin-bottom: 0.9rem; }
+.field:last-child { margin-bottom: 0; }
+.field label { display: block; font-size: 0.73rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; font-family: var(--mono); }
+.field label .opt { font-weight: 400; color: #bbb; margin-left: 4px; }
+.field label .req { color: var(--accent); }
+.char-count { text-align: right; font-family: var(--mono); font-size: 0.65rem; color: #bbb; margin-top: 3px; }
+
+input[type="text"], input[type="number"] {
+  width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 7px;
+  padding: 0 11px; font-family: var(--mono); font-size: 0.88rem; color: var(--text);
+  background: var(--surface); outline: none; transition: border-color 0.15s;
+}
+input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29,58,107,0.09); }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.unit-row { display: flex; gap: 6px; align-items: center; }
+.unit-row input { flex: 1; }
+.unit { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); background: var(--bg); border: 1px solid var(--border); height: 38px; padding: 0 9px; border-radius: 7px; display: flex; align-items: center; white-space: nowrap; }
+
+input[type="range"] { width: 100%; accent-color: var(--accent); margin-top: 5px; cursor: pointer; }
+.range-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.65rem; color: #bbb; margin-top: 2px; }
+
+/* Toggle */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--bg); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-info { }
+.toggle-name { font-size: 0.8rem; font-weight: 600; }
+.toggle-desc { font-size: 0.68rem; color: var(--muted); font-family: var(--mono); margin-top: 1px; }
+.toggle { position: relative; width: 34px; height: 19px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 19px; cursor: pointer; transition: background 0.18s; }
+.toggle-slider::before { content: ''; position: absolute; width: 13px; height: 13px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.18s; }
+.toggle input:checked + .toggle-slider { background: var(--accent); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(15px); }
+
+/* Buttons */
+.btn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 42px; border-radius: 8px; font-family: var(--sans); font-size: 0.84rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; width: 100%; }
+.btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex-shrink: 0; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #152d54; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg); }
+.btn + .btn { margin-top: 8px; }
+
+/* Status */
+.status { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 0.7rem; padding: 8px 11px; border-radius: 8px; margin-top: 10px; }
+.status.ok { background: var(--success-bg); color: var(--success); border: 1px solid #b3d9c0; }
+.status.err { background: var(--danger-bg); color: var(--danger); border: 1px solid #f0c0c0; }
+.status.idle { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.status.ok .status-dot { background: var(--success); }
+.status.err .status-dot { background: var(--danger); }
+.status.idle .status-dot { background: var(--muted); }
+
+/* Preview wrapper */
+.preview-box { background: #e8e7e2; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.preview-scale-note { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); }
+
+/* ─── ETIKETT VORSCHAU ─── */
+.label-wrap {
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 320px;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+/* Zone 1: Bezeichnung – invertiert, 2 Zeilen möglich */
+.lbl-title {
+  background: #000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 5px 8px;
+  line-height: 1.25;
+  white-space: normal;        /* Umbruch erlaubt */
+  word-break: break-word;
+  min-height: 28px;           /* entspricht ~12 mm bei 96dpi Vorschau */
+  display: none;
+  align-items: center;
+}
+
+/* Zone 2: DataMatrix + Info – fixe Höhe */
+.lbl-body {
+  display: flex;
+  align-items: stretch;
+  height: 40px;               /* ~16 mm */
+}
+
+.lbl-dm {
+  padding: 4px 4px 4px 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 48px;                /* DM-Canvas 42px + Padding */
+}
+
+.lbl-info {
+  flex: 1;
+  padding: 3px 5px 3px 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid #ddd;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lbl-gtin {
+  font-size: 7px;
+  font-weight: 700;
+  color: #000;
+  letter-spacing: 0.02em;
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  margin-bottom: 1px;
+}
+
+.lbl-row {
+  font-size: 6.5px;
+  color: #333;
+  display: flex;
+  gap: 3px;
+  align-items: baseline;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lbl-row .k { color: #888; font-size: 5.5px; white-space: nowrap; }
+.lbl-row .v { font-weight: 700; color: #000; }
+
+/* Zone 3: Mindestbestand – fixe Höhe */
+.lbl-minstock {
+  border-top: 1.5px solid #000;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  height: 25px;               /* ~10 mm */
+  padding: 0 7px;
+  gap: 0;
+}
+.lbl-minstock-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.lbl-minstock-label {
+  font-size: 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+  white-space: nowrap;
+}
+.lbl-minstock-val {
+  font-size: 16px;
+  font-weight: 900;
+  color: #000;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.lbl-minstock-unit {
+  font-size: 7px;
+  color: #333;
+  font-weight: 600;
+  margin-left: 4px;
+  align-self: flex-end;
+  padding-bottom: 2px;
+}
+
+/* Zone 4: GS1-String – fixe Höhe */
+.lbl-gs1 {
+  border-top: 1px solid #ddd;
+  background: #fafafa;
+  font-size: 5px;
+  color: #aaa;
+  padding: 2px 5px;
+  font-family: var(--mono);
+  word-break: break-all;
+  line-height: 1.35;
+  height: 12px;               /* ~5 mm */
+  overflow: hidden;
+}
+
+/* Info-Tabelle */
+.ai-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; font-family: var(--mono); }
+.ai-table td { padding: 4px 6px; border-bottom: 1px solid var(--bg); }
+.ai-table td:first-child { color: var(--accent); font-weight: 700; width: 44px; }
+.ai-table tr:last-child td { border-bottom: none; }
+.ai-note { font-size: 0.65rem; color: #bbb; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-family: var(--mono); line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Header -->
+<div class="header">
+  <div class="header-icon">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="16" y="16" width="4" height="4" rx="0.5"/><rect x="14" y="14" width="3" height="3" rx="0.5"/></svg>
+  </div>
+  <div>
+    <div class="header-title">Label-Generator</div>
+    <div class="header-sub">GS1 DataMatrix · Brother QL-810W · ISO 15415</div>
+  </div>
+  <div class="header-badge">QL-810W Ready</div>
+</div>
+
+<div class="layout">
+
+  <!-- LEFT COLUMN: Inputs -->
+  <div>
+
+    <!-- Produktdaten -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+        Produktdaten
+      </div>
+
+      <div class="field">
+        <label>Bezeichnung <span class="opt">· optional · max. 35 Zeichen · erscheint groß oben</span></label>
+        <input type="text" id="label-title" maxlength="35" placeholder="z. B. Paracetamol 500 mg" oninput="update()">
+        <div class="char-count" id="title-counter">0 / 35</div>
+      </div>
+
+      <div class="field">
+        <label>Produkt-ID <span class="req">*</span> <span class="opt">· 1–3 Stellen</span></label>
+        <input type="text" id="product-id" maxlength="3" placeholder="z. B. 42" oninput="this.value=this.value.replace(/\D/g,''); update()">
+      </div>
+
+      <div class="field">
+        <label>Verfallsdatum <span class="req">*</span> <span class="opt">· DD.MM.JJJJ · MM/JJJJ · JJMMTT</span></label>
+        <input type="text" id="expiry" placeholder="31.12.2026" oninput="update()">
+      </div>
+
+      <div class="field">
+        <label>Mindestbestand <span class="opt">· optional · manuell lesbar, nicht im Code</span></label>
+        <div class="unit-row">
+          <input type="number" id="min-stock" min="1" max="99999" placeholder="z. B. 10" oninput="update()">
+          <input type="text" id="min-stock-unit" maxlength="8" placeholder="Einheit" style="max-width:80px" oninput="update()">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Chargennummer (LOT) <span class="opt">· optional · AI 10</span></label>
+        <input type="text" id="lot" maxlength="20" placeholder="max. 20 Zeichen" oninput="update()">
+      </div>
+
+      <div class="field">
+        <label>Seriennummer <span class="opt">· optional · AI 21</span></label>
+        <input type="text" id="serial" maxlength="20" placeholder="max. 20 Zeichen" oninput="update()">
+      </div>
+    </div>
+
+    <!-- Format -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+        Etikett-Format
+      </div>
+
+      <div class="field">
+        <label>Breite</label>
+        <div class="unit-row">
+          <input type="number" id="label-width" value="38" min="12" max="102" step="1" oninput="syncSlider(); update()">
+          <div class="unit">mm</div>
+        </div>
+        <input type="range" id="width-range" min="12" max="62" value="38" step="1"
+          oninput="document.getElementById('label-width').value=this.value; update()">
+        <div class="range-labels"><span>12 mm</span><span>62 mm</span></div>
+      </div>
+      <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);margin-top:4px;">
+        Höhe wird automatisch aus aktiven Zonen berechnet:<br>
+        Bezeichnung 12 mm · Code+Info 16 mm · Mindestbestand 10 mm · GS1 5 mm
+      </div>
+    </div>
+
+    <!-- Darstellung -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+        Darstellung
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">GS1-String drucken</div>
+          <div class="toggle-desc">Lesbare AI-Sequenz am unteren Rand</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="show-gs1" checked onchange="update()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Rahmen drucken</div>
+          <div class="toggle-desc">Außenkante des Etiketts</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="show-border" onchange="update()"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN: Preview + Export -->
+  <div>
+
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Etikett-Vorschau
+      </div>
+
+      <div class="preview-box">
+        <div class="preview-scale-note" id="ruler-note">Breite: 38 mm · Maßstab: ca. 1:1</div>
+
+        <!-- Das eigentliche Etikett -->
+        <div class="label-wrap" id="label-wrap">
+
+          <!-- Zone 1: Bezeichnung -->
+          <div class="lbl-title" id="lbl-title-bar"></div>
+
+          <!-- Zone 2: Code + Info -->
+          <div class="lbl-body">
+            <div class="lbl-dm">
+            <canvas id="dm-preview" width="42" height="42"></canvas>
+            </div>
+            <div class="lbl-info" id="lbl-info">
+              <div class="lbl-gtin" id="lbl-gtin">–</div>
+              <div class="lbl-row"><span class="k">Verfall</span><span class="v" id="lbl-exp">–</span></div>
+              <div class="lbl-row" id="lbl-lot-row" style="display:none"><span class="k">LOT</span><span class="v" id="lbl-lot-val"></span></div>
+              <div class="lbl-row" id="lbl-sn-row" style="display:none"><span class="k">S/N</span><span class="v" id="lbl-sn-val"></span></div>
+            </div>
+          </div>
+
+          <!-- Zone 3: Mindestbestand -->
+          <div class="lbl-minstock" id="lbl-minstock" style="display:none">
+            <div class="lbl-minstock-left">
+              <div class="lbl-minstock-label">Mindestbestand</div>
+            </div>
+            <div class="lbl-minstock-val" id="lbl-ms-val"></div>
+            <div class="lbl-minstock-unit" id="lbl-ms-unit"></div>
+          </div>
+
+          <!-- Zone 4: GS1-String -->
+          <div class="lbl-gs1" id="lbl-gs1-bar" style="display:none"></div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><path d="M6 9V4a1 1 0 011-1h10a1 1 0 011 1v5"/><rect x="2" y="9" width="20" height="11" rx="2"/><path d="M6 14h12M6 18h8"/></svg>
+        Export
+      </div>
+      <button class="btn btn-primary" onclick="exportPDF()">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+        PDF für QL-810W exportieren
+      </button>
+      <button class="btn btn-secondary" onclick="copyGS1()">
+        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        GS1-String kopieren
+      </button>
+      <div class="status idle" id="status">
+        <div class="status-dot"></div>
+        <span>Produkt-ID und Verfallsdatum eingeben</span>
+      </div>
+    </div>
+
+    <!-- GS1 Info -->
+    <div class="card">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        GS1 Application Identifiers
+      </div>
+      <table class="ai-table">
+        <tr><td>(01)</td><td>GTIN-14 – Produktidentifikation</td></tr>
+        <tr><td>(17)</td><td>Verfallsdatum (JJMMTT)</td></tr>
+        <tr><td>(10)</td><td>Chargennummer / LOT</td></tr>
+        <tr><td>(21)</td><td>Seriennummer</td></tr>
+      </table>
+      <div class="ai-note">
+        GTIN-14 = 13 Stellen (Nullen + Produkt-ID) + Prüfziffer (Modulo 10)<br>
+        Mindestbestand: nur auf Etikett sichtbar – nicht im DataMatrix kodiert
+      </div>
+    </div>
+
+  </div>
+</div><!-- /layout -->
+</div><!-- /app -->
+
+<canvas id="dm-export" style="display:none"></canvas>
+
+<script>
+let gs1String = '';
+let lastValid = false;
+
+// ─── Hilfsfunktionen ───────────────────────────────────────────
+function calcCheckDigit(d13) {
+  let s = 0;
+  for(let i=0;i<13;i++) s += parseInt(d13[i]) * (i%2===0 ? 1 : 3);
+  return (10 - s%10) % 10;
+}
+
+function buildGTIN(pid) {
+  if(!pid || pid.length<1 || pid.length>3 || !/^\d+$/.test(pid)) return null;
+  const d13 = ('0000000000000'+pid).slice(-13);
+  return d13 + calcCheckDigit(d13);
+}
+
+function parseExpiry(raw) {
+  raw = raw.trim();
+  let dd='00', mm='', yy='';
+  if(/^\d{6}$/.test(raw)) {
+    yy=raw.slice(0,2); mm=raw.slice(2,4); dd=raw.slice(4,6)||'00';
+  } else if(/^(\d{2})\.(\d{2})\.(\d{4})$/.test(raw)) {
+    const m=raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    dd=m[1]; mm=m[2]; yy=String(parseInt(m[3])%100).padStart(2,'0');
+  } else if(/^(\d{2})\.(\d{2})\.(\d{2})$/.test(raw)) {
+    const m=raw.match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
+    dd=m[1]; mm=m[2]; yy=m[3];
+  } else if(/^(\d{2})\/(\d{4})$/.test(raw)) {
+    const m=raw.match(/^(\d{2})\/(\d{4})$/);
+    mm=m[1]; yy=String(parseInt(m[2])%100).padStart(2,'0');
+  } else if(/^(\d{2})\/(\d{2})$/.test(raw)) {
+    const m=raw.match(/^(\d{2})\/(\d{2})$/);
+    mm=m[1]; yy=m[2];
+  } else return null;
+  const mi=parseInt(mm), di=parseInt(dd);
+  if(mi<1||mi>12||di<0||di>31) return null;
+  return yy+mm+(di>0?String(di).padStart(2,'0'):'00');
+}
+
+function fmtExpiry(expiry6) {
+  const yy=expiry6.slice(0,2), mm=expiry6.slice(2,4), dd=expiry6.slice(4,6);
+  const yyyy=2000+parseInt(yy);
+  return parseInt(dd)>0 ? dd+'.'+mm+'.'+yyyy : mm+'/'+yyyy;
+}
+
+function buildGS1raw(gtin, expiry6, lot, serial) {
+  let s=']d2'+'01'+gtin+'17'+expiry6;
+  if(lot)    s+='\x1D'+'10'+lot;
+  if(serial) s+='\x1D'+'21'+serial;
+  return s;
+}
+
+function buildGS1readable(gtin, expiry6, lot, serial) {
+  let s='(01)'+gtin+'(17)'+expiry6;
+  if(lot)    s+='(10)'+lot;
+  if(serial) s+='(21)'+serial;
+  return s;
+}
+
+function setStatus(type, msg) {
+  const el=document.getElementById('status');
+  el.className='status '+type;
+  el.querySelector('span').textContent=msg;
+}
+
+function syncSlider() {
+  document.getElementById('width-range').value = Math.min(62,parseFloat(document.getElementById('label-width').value)||38);
+}
+
+// ─── Haupt-Update ──────────────────────────────────────────────
+function update() {
+  const title    = document.getElementById('label-title').value;
+  const pid      = document.getElementById('product-id').value.trim();
+  const expRaw   = document.getElementById('expiry').value.trim();
+  const lot      = document.getElementById('lot').value.trim();
+  const serial   = document.getElementById('serial').value.trim();
+  const minStock = document.getElementById('min-stock').value.trim();
+  const msUnit   = document.getElementById('min-stock-unit').value.trim();
+  const showGs1  = document.getElementById('show-gs1').checked;
+  const wMM      = parseFloat(document.getElementById('label-width').value)||38;
+
+  // Zähler
+  document.getElementById('title-counter').textContent = title.length+' / 35';
+  syncSlider();
+  document.getElementById('ruler-note').textContent = 'Breite: '+wMM+' mm · Höhe: automatisch';
+
+  // Validierung
+  const gtin    = buildGTIN(pid);
+  const expiry6 = expRaw ? parseExpiry(expRaw) : null;
+
+  if(!pid)     { setStatus('idle','Produkt-ID eingeben');                                                 lastValid=false; clearPreview(); return; }
+  if(!gtin)    { setStatus('err','Produkt-ID ungültig – 1 bis 3 Ziffern');                               lastValid=false; clearPreview(); return; }
+  if(!expRaw)  { setStatus('idle','Verfallsdatum eingeben');                                              lastValid=false; clearPreview(); return; }
+  if(!expiry6) { setStatus('err','Datum ungültig – erlaubt: DD.MM.JJJJ · MM/JJJJ · JJMMTT');            lastValid=false; clearPreview(); return; }
+
+  // GS1-String bauen
+  gs1String = buildGS1raw(gtin, expiry6, lot, serial);
+  const gs1rd = buildGS1readable(gtin, expiry6, lot, serial);
+
+  // DataMatrix rendern
+  try {
+    bwipjs.toCanvas(document.getElementById('dm-preview'), {
+      bcid:'datamatrix', text:gs1String, scale:3, height:15, includetext:false, padding:1
+    });
+  } catch(e) { setStatus('err','DataMatrix: '+e.message); return; }
+
+  // ── Preview-Etikett aktualisieren ──
+
+  // Zone 1: Bezeichnung
+  const tb = document.getElementById('lbl-title-bar');
+  if(title) { tb.textContent=title; tb.style.display='block'; }
+  else       { tb.style.display='none'; }
+
+  // Zone 2: Info
+  document.getElementById('lbl-gtin').textContent = gtin;
+  document.getElementById('lbl-exp').textContent  = fmtExpiry(expiry6);
+
+  const lotRow=document.getElementById('lbl-lot-row'), snRow=document.getElementById('lbl-sn-row');
+  if(lot)    { document.getElementById('lbl-lot-val').textContent=lot;    lotRow.style.display='flex'; }
+  else       { lotRow.style.display='none'; }
+  if(serial) { document.getElementById('lbl-sn-val').textContent=serial;  snRow.style.display='flex'; }
+  else       { snRow.style.display='none'; }
+
+  // Zone 3: Mindestbestand
+  const msDiv=document.getElementById('lbl-minstock');
+  if(minStock) {
+    document.getElementById('lbl-ms-val').textContent  = minStock;
+    document.getElementById('lbl-ms-unit').textContent = msUnit || 'Stk.';
+    msDiv.style.display='flex';
+  } else {
+    msDiv.style.display='none';
+  }
+
+  // Zone 4: GS1-String
+  const gs1bar=document.getElementById('lbl-gs1-bar');
+  if(showGs1) { gs1bar.textContent=gs1rd; gs1bar.style.display=''; }
+  else        { gs1bar.style.display='none'; }
+
+  setStatus('ok','GTIN: '+gtin+' · Export bereit');
+  lastValid=true;
+}
+
+function clearPreview() {
+  const ctx=document.getElementById('dm-preview').getContext('2d');
+  ctx.clearRect(0,0,200,200);
+  document.getElementById('lbl-title-bar').style.display='none';
+  document.getElementById('lbl-gtin').textContent='–';
+  document.getElementById('lbl-exp').textContent='–';
+  document.getElementById('lbl-lot-row').style.display='none';
+  document.getElementById('lbl-sn-row').style.display='none';
+  document.getElementById('lbl-minstock').style.display='none';
+  document.getElementById('lbl-gs1-bar').style.display='none';
+}
+
+// ─── PDF Export – fixe Zonenhöhen ─────────────────────────────
+//
+//  ZONENHÖHEN (mm) – müssen mit CSS-Vorschau übereinstimmen:
+//  Z1  Bezeichnung   : 12 mm  (2 Zeilen à ~4.5 mm + 3 mm Padding)
+//  Z2  DM + Info     : 16 mm  (DM 12×12 mm, 2 mm Rand oben+unten)
+//  Z3  Mindestbestand: 10 mm
+//  Z4  GS1-String    :  5 mm
+//  Summe alle aktiv  : 43 mm  → Standard-Höhe
+//
+const Z1 = 12;   // Bezeichnung
+const Z2 = 16;   // DataMatrix + Info
+const Z3 = 10;   // Mindestbestand
+const Z4 =  5;   // GS1-String
+const DM = 12;   // DataMatrix-Quadrat
+const M  =  2;   // Seitenrand
+
+function mmToPx(mm) { return mm * 3.7795275591; }
+
+async function exportPDF() {
+  if(!lastValid) { setStatus('err','Bitte zuerst gültige Daten eingeben'); return; }
+
+  const wMM = parseFloat(document.getElementById('label-width').value) || 38;
+  const showGs1    = document.getElementById('show-gs1').checked;
+  const showBorder = document.getElementById('show-border').checked;
+  const title    = document.getElementById('label-title').value.trim();
+  const pid      = document.getElementById('product-id').value.trim();
+  const expRaw   = document.getElementById('expiry').value.trim();
+  const lot      = document.getElementById('lot').value.trim();
+  const serial   = document.getElementById('serial').value.trim();
+  const minStock = document.getElementById('min-stock').value.trim();
+  const msUnit   = document.getElementById('min-stock-unit').value.trim() || 'Stk.';
+
+  const gtin    = buildGTIN(pid);
+  const expiry6 = parseExpiry(expRaw);
+  const expDisp = fmtExpiry(expiry6);
+  const gs1rd   = buildGS1readable(gtin, expiry6, lot, serial);
+
+  // Gesamthöhe aus aktiven Zonen berechnen
+  const hMM = (title ? Z1 : 0) + Z2 + (minStock ? Z3 : 0) + (showGs1 ? Z4 : 0);
+
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:[wMM, hMM] });
+
+  let y = 0;  // Laufende Y-Position, von oben
+
+  // ═══ ZONE 1: Bezeichnung ═══════════════════════════════════
+  if(title) {
+    doc.setFillColor(0, 0, 0);
+    doc.rect(0, y, wMM, Z1, 'F');
+
+    // Langer Titel: auf 2 Zeilen umbrechen
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    const lines = doc.splitTextToSize(title, wMM - M*2);
+    const lineH  = 4.5;  // mm pro Zeile bei 9pt
+    const textBlockH = lines.length * lineH;
+    const textY  = y + (Z1 - textBlockH) / 2 + lineH - 1;
+    doc.text(lines, M, textY);
+    y += Z1;
+  }
+
+  // ═══ ZONE 2: DataMatrix + Textinfo ═════════════════════════
+  // Hintergrund weiß
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, y, wMM, Z2, 'F');
+
+  // DataMatrix: vertikal zentriert in Z2
+  const ec = document.getElementById('dm-export');
+  bwipjs.toCanvas(ec, {
+    bcid:'datamatrix', text:gs1String,
+    scale: Math.max(3, Math.ceil(mmToPx(DM) / 20)),
+    height: 15, includetext:false, padding:1
+  });
+  const dmImg = ec.toDataURL('image/png');
+  const dmX = M;
+  const dmY = y + (Z2 - DM) / 2;  // vertikal zentriert
+  doc.addImage(dmImg, 'PNG', dmX, dmY, DM, DM);
+
+  // Trennlinie zwischen DM und Text
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.2);
+  doc.line(M + DM + 1.5, y + 1.5, M + DM + 1.5, y + Z2 - 1.5);
+
+  // Textblock rechts neben DM
+  const tx = M + DM + 3;          // X-Start Textblock
+  const tw = wMM - tx - M;        // verfügbare Breite
+  let   ty = y + 2.8;             // Y-Start erste Zeile
+  const lh = 3.0;                 // Zeilenhöhe
+
+  // GTIN (fett, etwas größer)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(5.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text(gtin, tx, ty, {maxWidth: tw});
+  ty += lh + 0.8;
+
+  // Verfall
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(4.2); doc.setTextColor(130,130,130);
+  doc.text('Verfall', tx, ty);
+  doc.setFont('helvetica', 'bold');  doc.setTextColor(0,0,0);
+  doc.text(expDisp, tx + 8, ty, {maxWidth: tw - 8});
+  ty += lh;
+
+  // LOT
+  if(lot) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(4.2); doc.setTextColor(130,130,130);
+    doc.text('LOT', tx, ty);
+    doc.setFont('helvetica', 'bold');  doc.setTextColor(0,0,0);
+    doc.text(lot, tx + 8, ty, {maxWidth: tw - 8});
+    ty += lh;
+  }
+
+  // Seriennummer
+  if(serial) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(4.2); doc.setTextColor(130,130,130);
+    doc.text('S/N', tx, ty);
+    doc.setFont('helvetica', 'bold');  doc.setTextColor(0,0,0);
+    doc.text(serial, tx + 8, ty, {maxWidth: tw - 8});
+  }
+
+  y += Z2;
+
+  // ═══ ZONE 3: Mindestbestand ═════════════════════════════════
+  if(minStock) {
+    // Trennlinie oben, Hintergrund
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5);
+    doc.line(0, y, wMM, y);
+    doc.setFillColor(240, 240, 240);
+    doc.rect(0, y, wMM, Z3, 'F');
+
+    // Label "MINDESTBESTAND" (links oben, klein, grau)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(4.0); doc.setTextColor(100,100,100);
+    doc.text('MINDESTBESTAND', M, y + 3.5);
+
+    // Einheit (links unten, klein)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(4.5); doc.setTextColor(60,60,60);
+    doc.text(msUnit, M, y + Z3 - 2.0);
+
+    // Zahl: groß, rechtsbündig, vertikal zentriert
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(0,0,0);
+    doc.text(minStock, wMM - M, y + Z3 - 1.8, {align:'right'});
+
+    y += Z3;
+  }
+
+  // ═══ ZONE 4: GS1-String ═════════════════════════════════════
+  if(showGs1) {
+    doc.setFillColor(250, 250, 250);
+    doc.rect(0, y, wMM, Z4, 'F');
+    doc.setDrawColor(210,210,210); doc.setLineWidth(0.15);
+    doc.line(0, y, wMM, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(2.8); doc.setTextColor(160,160,160);
+    doc.text(gs1rd, M, y + 3.2, {maxWidth: wMM - M*2});
+  }
+
+  // ═══ Rahmen ══════════════════════════════════════════════════
+  if(showBorder) {
+    doc.setDrawColor(60,60,60); doc.setLineWidth(0.3);
+    doc.rect(0.3, 0.3, wMM - 0.6, hMM - 0.6);
+  }
+
+  const fn = 'label_' + gtin + '_' + expiry6 + '.pdf';
+  doc.save(fn);
+  setStatus('ok', 'PDF exportiert: ' + fn + ' (' + wMM + '×' + hMM + ' mm)');
+}
+
+// ─── GS1-String kopieren ───────────────────────────────────────
+function copyGS1() {
+  if(!lastValid) { setStatus('err','Keine gültigen Daten vorhanden'); return; }
+  const gtin    = buildGTIN(document.getElementById('product-id').value.trim());
+  const expiry6 = parseExpiry(document.getElementById('expiry').value.trim());
+  const lot     = document.getElementById('lot').value.trim();
+  const serial  = document.getElementById('serial').value.trim();
+  const rd      = buildGS1readable(gtin, expiry6, lot, serial);
+  navigator.clipboard.writeText(rd).then(()=>setStatus('ok','Kopiert: '+rd));
+}
+</script>
+</body>
+</html>
